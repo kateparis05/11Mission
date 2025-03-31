@@ -1,177 +1,227 @@
-// src/components/BookList.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/BookList.tsx
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Book, BooksResponse } from '../types/types';
+import { useCart } from '../contexts/CartContext';
+import Toast from '../components/Toast';
 import axios from 'axios';
-import { Table, Pagination, Form, Alert } from 'react-bootstrap';
-import { Book, BookResponse } from '../types/Book';
 
 const BookList: React.FC = () => {
+    const { category = 'all', page = '1' } = useParams<{ category?: string, page?: string }>();
     const [books, setBooks] = useState<Book[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
     const [totalItems, setTotalItems] = useState(0);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(5);
-    const [sortBy, setSortBy] = useState('Title');
-    const [sortDirection, setSortDirection] = useState('asc');
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [pageNumber, setPageNumber] = useState(parseInt(page) || 1);
+    const [loading, setLoading] = useState(true);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const pageSize = 5;
+    const { addToCart, setLastAddedFrom } = useCart();
+    const navigate = useNavigate();
 
-    const pageSizeOptions = [5, 10, 25, 50];
-
-    // Updated port to match your running backend
-    const apiBaseUrl = 'http://localhost:5225';
-
-    const fetchBooks = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-
-        try {
-            console.log('Attempting to fetch books from:', `${apiBaseUrl}/api/books`);
-            const response = await axios.get<BookResponse>(
-                `${apiBaseUrl}/api/books?pageNumber=${currentPage}&pageSize=${pageSize}&sortBy=${sortBy}&sortDirection=${sortDirection}`
-            );
-            setBooks(response.data.books);
-            setTotalItems(response.data.totalItems);
-            console.log('Successfully fetched books:', response.data);
-        } catch (error) {
-            console.error('Error fetching books:', error);
-            setError("Could not connect to the API server. Please ensure the backend is running.");
-        } finally {
-            setLoading(false);
-        }
-    }, [currentPage, pageSize, sortBy, sortDirection]);
-
+    // Fetch available categories
     useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const response = await axios.get('http://localhost:5225/api/categories');
+                setCategories(response.data);
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+            }
+        };
+
+        fetchCategories();
+    }, []);
+
+    // Fetch books with filtering
+    useEffect(() => {
+        const fetchBooks = async () => {
+            setLoading(true);
+            try {
+                const currentPage = parseInt(page) || 1;
+                setPageNumber(currentPage);
+
+                console.log("Fetching books:", `http://localhost:5225/api/books?pageNumber=${currentPage}&pageSize=${pageSize}&category=${category}`);
+
+                const response = await axios.get<BooksResponse>(
+                    `http://localhost:5225/api/books?pageNumber=${currentPage}&pageSize=${pageSize}&category=${category}`
+                );
+
+                console.log("API Response:", response.data); // Add this line to debug
+
+                if (response.data && response.data.books) {
+                    setBooks(response.data.books);
+                    setTotalItems(response.data.totalItems);
+                    console.log("Books set:", response.data.books);
+                } else {
+                    console.error("Invalid response format:", response.data);
+                    setBooks([]);
+                    setTotalItems(0);
+                }
+            } catch (error) {
+                console.error('Error fetching books:', error);
+                setBooks([]);
+                setTotalItems(0);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchBooks();
-    }, [fetchBooks]);
+    }, [category, page, pageSize]);
 
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const pageCount = Math.ceil(totalItems / pageSize);
 
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page);
-    };
+    const handleAddToCart = async (book: Book) => {
+        try {
+            const response = await axios.post('http://localhost:5225/api/cart', {
+                bookId: book.bookID,
+                quantity: 1
+            });
 
-    const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setPageSize(Number(e.target.value));
-        setCurrentPage(1); // Reset to first page when changing page size
-    };
+            addToCart({
+                bookId: book.bookID,
+                title: book.title,
+                author: book.author,
+                price: book.price,
+                quantity: 1,
+                subtotal: book.price
+            });
 
-    const handleSort = (column: string) => {
-        if (sortBy === column) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortBy(column);
-            setSortDirection('asc');
+            // Save current path for "Continue Shopping"
+            setLastAddedFrom(window.location.pathname);
+
+            // Show toast
+            setToastMessage(`${book.title} has been added to your cart!`);
+            setShowToast(true);
+        } catch (error) {
+            console.error('Error adding to cart:', error);
         }
     };
 
-    const renderSortIcon = (column: string) => {
-        if (sortBy !== column) return null;
-        return sortDirection === 'asc' ? ' ▲' : ' ▼';
+    const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newCategory = e.target.value;
+        navigate(`/books/category/${newCategory}/page/1`);
     };
 
     return (
-        <div className="book-list-container">
-            <h2 className="my-4">Bookstore Inventory</h2>
+        <div className="container">
+            <div className="row mb-4">
+                <div className="col-md-6">
+                    <h2>Book List</h2>
+                </div>
+                <div className="col-md-6">
+                    <div className="form-group">
+                        <label htmlFor="category-filter" className="form-label">Filter by Category:</label>
+                        <select
+                            id="category-filter"
+                            className="form-select"
+                            value={category}
+                            onChange={handleCategoryChange}
+                        >
+                            <option value="all">All Categories</option>
+                            {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
 
-            {error && (
-                <Alert variant="danger">
-                    {error}
-                    <hr />
-                    <p className="mb-0">
-                        Troubleshooting tips:
-                        <ul>
-                            <li>Make sure your ASP.NET Core API is running</li>
-                            <li>Check the terminal where you started the API to confirm the URL/port</li>
-                            <li>Verify CORS is properly configured in Program.cs</li>
-                        </ul>
-                    </p>
-                </Alert>
+            {loading ? (
+                <div className="d-flex justify-content-center">
+                    <div className="spinner-border" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div className="row row-cols-1 g-4">
+                        {books.map(book => (
+                            <div key={book.bookID} className="col">
+                                <div className="card h-100 shadow-sm">
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-8">
+                                                <h5 className="card-title">{book.title}</h5>
+                                                <h6 className="card-subtitle mb-2 text-muted">{book.author}</h6>
+                                                <p className="card-text">
+                                                    <small>
+                                                        Publisher: {book.publisher}<br />
+                                                        ISBN: {book.isbn}<br />
+                                                        Classification: {book.classification}<br />
+                                                        Category: <span className="badge bg-secondary">{book.category}</span><br />
+                                                        Pages: {book.pageCount}
+                                                    </small>
+                                                </p>
+                                            </div>
+                                            <div className="col-md-4 d-flex flex-column align-items-end justify-content-between">
+                                                <div className="mb-3 text-end">
+                                                    <span className="h5">${book.price.toFixed(2)}</span>
+                                                </div>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    onClick={() => handleAddToCart(book)}
+                                                >
+                                                    <i className="bi bi-cart-plus"></i> Add to Cart
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="d-flex justify-content-center mt-4">
+                        <nav aria-label="Page navigation">
+                            <ul className="pagination">
+                                <li className={`page-item ${pageNumber <= 1 ? 'disabled' : ''}`}>
+                                    <Link
+                                        className="page-link"
+                                        to={`/books/category/${category}/page/${pageNumber - 1}`}
+                                        aria-label="Previous"
+                                    >
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </Link>
+                                </li>
+
+                                {Array.from({length: pageCount}, (_, i) => i).map(i => (
+                                    <li
+                                        key={i + 1}
+                                        className={`page-item ${pageNumber === i + 1 ? 'active' : ''}`}
+                                    >
+                                        <Link
+                                            className="page-link"
+                                            to={`/books/category/${category}/page/${i + 1}`}
+                                        >
+                                            {i + 1}
+                                        </Link>
+                                    </li>
+                                ))}
+
+                                <li className={`page-item ${pageNumber >= pageCount ? 'disabled' : ''}`}>
+                                    <Link
+                                        className="page-link"
+                                        to={`/books/category/${category}/page/${pageNumber + 1}`}
+                                        aria-label="Next"
+                                    >
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </Link>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </>
             )}
 
-            {loading && <p>Loading books...</p>}
-
-            <div className="d-flex justify-content-end mb-3">
-                <Form.Group style={{ width: '200px' }}>
-                    <Form.Label>Books per page:</Form.Label>
-                    <Form.Select value={pageSize} onChange={handlePageSizeChange}>
-                        {pageSizeOptions.map(option => (
-                            <option key={option} value={option}>{option}</option>
-                        ))}
-                    </Form.Select>
-                </Form.Group>
-            </div>
-
-            <Table striped bordered hover responsive>
-                <thead>
-                <tr>
-                    <th onClick={() => handleSort('Title')} style={{ cursor: 'pointer' }}>
-                        Title {renderSortIcon('Title')}
-                    </th>
-                    <th onClick={() => handleSort('Author')} style={{ cursor: 'pointer' }}>
-                        Author {renderSortIcon('Author')}
-                    </th>
-                    <th onClick={() => handleSort('Publisher')} style={{ cursor: 'pointer' }}>
-                        Publisher {renderSortIcon('Publisher')}
-                    </th>
-                    <th>ISBN</th>
-                    <th>Classification</th>
-                    <th>Category</th>
-                    <th>Pages</th>
-                    <th>Price</th>
-                </tr>
-                </thead>
-                <tbody>
-                {books.length > 0 ? (
-                    books.map(book => (
-                        <tr key={book.bookID}>
-                            <td>{book.title}</td>
-                            <td>{book.author}</td>
-                            <td>{book.publisher}</td>
-                            <td>{book.isbn}</td>
-                            <td>{book.classification}</td>
-                            <td>{book.category}</td>
-                            <td>{book.pageCount}</td>
-                            <td>${book.price.toFixed(2)}</td>
-                        </tr>
-                    ))
-                ) : !loading && !error ? (
-                    <tr>
-                        <td colSpan={8} className="text-center">No books found</td>
-                    </tr>
-                ) : null}
-                </tbody>
-            </Table>
-
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    Showing {books.length} of {totalItems} books
-                </div>
-                {totalPages > 0 && (
-                    <Pagination>
-                        <Pagination.First onClick={() => handlePageChange(1)} disabled={currentPage === 1} />
-                        <Pagination.Prev onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} />
-
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                            .filter(page => Math.abs(page - currentPage) < 3 || page === 1 || page === totalPages)
-                            .map((page, index, array) => {
-                                const needsEllipsis = index > 0 && page - array[index - 1] > 1;
-                                return (
-                                    <React.Fragment key={page}>
-                                        {needsEllipsis && <Pagination.Ellipsis disabled />}
-                                        <Pagination.Item
-                                            active={page === currentPage}
-                                            onClick={() => handlePageChange(page)}
-                                        >
-                                            {page}
-                                        </Pagination.Item>
-                                    </React.Fragment>
-                                );
-                            })}
-
-                        <Pagination.Next onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} />
-                        <Pagination.Last onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages} />
-                    </Pagination>
-                )}
-            </div>
+            {/* Toast notification */}
+            <Toast
+                show={showToast}
+                message={toastMessage}
+                onClose={() => setShowToast(false)}
+            />
         </div>
     );
 };
