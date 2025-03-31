@@ -1,29 +1,31 @@
 // src/App.tsx
 import React from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Container, Navbar } from 'react-bootstrap';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { CartProvider } from './contexts/CartContext';
 import BookList from './components/BookList';
+import Cart from './components/Cart';
+import Layout from './components/Layout';
 
 function App() {
-  return (
-      <div className="App">
-        <Navbar bg="dark" variant="dark" expand="lg">
-          <Container>
-            <Navbar.Brand href="#home">Jeff's Bookstore</Navbar.Brand>
-          </Container>
-        </Navbar>
-
-        <Container className="mt-4">
-          <BookList />
-        </Container>
-
-        <footer className="bg-light text-center text-lg-start mt-5">
-          <div className="text-center p-3">
-            © 2025 Bookstore - Mission #11
-          </div>
-        </footer>
-      </div>
-  );
+    return (
+        <CartProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/" element={<Layout />}>
+                        <Route index element={<BookList />} />
+                        <Route path="books">
+                            <Route index element={<BookList />} />
+                            <Route path="category/:category" element={<BookList />} />
+                            <Route path="page/:page" element={<BookList />} />
+                            <Route path="category/:category/page/:page" element={<BookList />} />
+                        </Route>
+                        <Route path="cart" element={<Cart />} />
+                    </Route>
+                </Routes>
+            </BrowserRouter>
+        </CartProvider>
+    );
 }
 
 export default App;
