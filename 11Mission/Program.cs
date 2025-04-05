@@ -1,4 +1,5 @@
-using _11Mission.Data;
+using _11Mission.Data; 
+using _11Mission.Models; 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models; 
 using Microsoft.AspNetCore.Mvc;
@@ -172,6 +173,106 @@ app.MapPost("/api/cart", async ([FromServices] BookstoreContext context, [FromBo
     }
 })
 .WithName("AddToCart")
+.WithOpenApi();
+
+// Endpoint to get a specific book by ID
+app.MapGet("/api/books/{id}", async ([FromServices] BookstoreContext context, int id) =>
+{
+    try
+    {
+        var book = await context.Books.FindAsync(id);
+        if (book == null)
+        {
+            return Results.NotFound($"Book with ID {id} not found");
+        }
+        
+        return Results.Ok(book);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error getting book: {ex.Message}");
+        return Results.Problem($"Error retrieving book: {ex.Message}");
+    }
+})
+.WithName("GetBook")
+.WithOpenApi();
+
+// Endpoint to add a new book
+app.MapPost("/api/books", async ([FromServices] BookstoreContext context, [FromBody] Book book) =>
+{
+    try
+    {
+        context.Books.Add(book);
+        await context.SaveChangesAsync();
+        
+        return Results.Created($"/api/books/{book.BookID}", book);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error adding book: {ex.Message}");
+        return Results.Problem($"Error adding book: {ex.Message}");
+    }
+})
+.WithName("AddBook")
+.WithOpenApi();
+
+// Endpoint to update a book
+app.MapPut("/api/books/{id}", async ([FromServices] BookstoreContext context, int id, [FromBody] Book updatedBook) =>
+{
+    try
+    {
+        var book = await context.Books.FindAsync(id);
+        if (book == null)
+        {
+            return Results.NotFound($"Book with ID {id} not found");
+        }
+        
+        // Update properties
+        book.Title = updatedBook.Title;
+        book.Author = updatedBook.Author;
+        book.Publisher = updatedBook.Publisher;
+        book.ISBN = updatedBook.ISBN;
+        book.Classification = updatedBook.Classification;
+        book.Category = updatedBook.Category;
+        book.PageCount = updatedBook.PageCount;
+        book.Price = updatedBook.Price;
+        
+        await context.SaveChangesAsync();
+        
+        return Results.Ok(book);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error updating book: {ex.Message}");
+        return Results.Problem($"Error updating book: {ex.Message}");
+    }
+})
+.WithName("UpdateBook")
+.WithOpenApi();
+
+// Endpoint to delete a book
+app.MapDelete("/api/books/{id}", async ([FromServices] BookstoreContext context, int id) =>
+{
+    try
+    {
+        var book = await context.Books.FindAsync(id);
+        if (book == null)
+        {
+            return Results.NotFound($"Book with ID {id} not found");
+        }
+        
+        context.Books.Remove(book);
+        await context.SaveChangesAsync();
+        
+        return Results.Ok($"Book with ID {id} deleted successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error deleting book: {ex.Message}");
+        return Results.Problem($"Error deleting book: {ex.Message}");
+    }
+})
+.WithName("DeleteBook")
 .WithOpenApi();
 
 // Add a simple test endpoint

@@ -4,7 +4,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Book, BooksResponse } from '../types/types';
 import { useCart } from '../contexts/CartContext';
 import Toast from '../components/Toast';
-import axios from 'axios';
+import axios from 'axios'; 
+
 
 const BookList: React.FC = () => {
     const { category = 'all', page = '1' } = useParams<{ category?: string, page?: string }>();
